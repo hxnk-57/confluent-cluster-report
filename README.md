@@ -4,7 +4,7 @@ This script generates a metric report using the Confluent Cloud Metrics API.
 The report includes active connections and partitions, providing more visibiility into utilization.
 
 
-|**Metric**|**Limit**|**Effect**|
+|**Metric**|**Limit**|**What happens when the limit is reached?**|
 |-----|-------|------|
 |Active Connections|18000 per CKU |Soft Limit. Potential Performance Degregagation|
 |Partitions|4500 per CKU| Hard Limit. No new topics can be created once the limit is reached|
@@ -15,8 +15,8 @@ The report includes active connections and partitions, providing more visibiilit
 ### Setup Instructions
 1. Clone the repository and navigate to the project directory.
 ```
-git clone 
-cd 
+git clone https://github.com/hxnk-57/confluent-cluster-report.git
+cd confluent-cluster-report
 ```
 
 2. Create a Virtual Environment:
@@ -24,7 +24,7 @@ cd
 python -m venv <virtual-environment-name>
 ```
 
-4. Activate the Virtual Environment:
+3. Activate the Virtual Environment:
 ```
 source virtual-environment-name/bin/activate
 ```
@@ -54,7 +54,7 @@ python -m pip install -r requirements.txt
     } 
 ```
 
-### Running the Script
+## Running the Script
 1. Generate the Report
 
 ```
