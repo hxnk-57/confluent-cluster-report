@@ -1,0 +1,10 @@
+{
+    "cluster_alias" : {
+        "id": "cluster_id",
+        "CKU" : 1    
+    },
+    "cluster_alias" : {
+        "id": "cluster_id",
+        "CKU" : 1    
+    }             
+}
