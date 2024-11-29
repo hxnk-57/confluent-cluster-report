@@ -5,7 +5,7 @@ The report includes active connections and partitions, providing more visibiilit
 
 
 |**Metric**|**Limit**|**What happens when the limit is reached?**|
-|-----|-------|------|
+|---|:---|:---|
 |Active Connections|18000 per CKU |Soft Limit. Potential Performance Degregagation|
 |Partitions|4500 per CKU| Hard Limit. No new topics can be created once the limit is reached|
 
@@ -14,7 +14,7 @@ The report includes active connections and partitions, providing more visibiilit
 
 ### Setup Instructions
 1. Clone the repository and navigate to the project directory.
-```
+```bash
 git clone https://github.com/hxnk-57/confluent-cluster-report.git
 cd confluent-cluster-report
 ```
@@ -41,13 +41,13 @@ python -m pip install -r requirements.txt
     - Assign the MetricsViewer role to the service account.
 
 2. Generate an API Key
-    - Create an API key owned by the service account.
+    - Create a Cloud API key owned by the service account.
     - Base64 encode the `API_KEY:SECRET` pair (e.g., `echo -n "API_KEY:SECRET" | base64`)
 
 3. Prepare Configuration files
     - Rename `.env.example` to `.env` and update it with the Base64-encoded credentials.
     - Rename `clusters.json.example` to `clusters.json` and populate it with cluster details in the following format:
-```
+```json
     "cluster_alias" : {
         "id": "cluster_id",
         "CKU" : 1    

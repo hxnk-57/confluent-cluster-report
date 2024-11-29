@@ -71,12 +71,20 @@ def generate_report(clusters):
 
     avg_connections = [clusters[name]["avg_active_connections"] for name in cluster_names]
     max_connections = [clusters[name]["max_avg_active_connections"] for name in cluster_names]
+    avg_cluster_load = [100 * clusters[name]["avg_cluster_load"] for name in cluster_names]
+    max_cluster_load = [100 *clusters[name]["max_avg_cluster_load"] for name in cluster_names]
+
     cku_thresholds = [18000 * clusters[name]["CKU"] for name in cluster_names]
     partitions = [clusters[name]["partition_count"] for name in cluster_names]
     partition_limits = [4500 * clusters[name]["CKU"] for name in cluster_names]
     
+    today = datetime.today()
+    seven_days_ago = today - timedelta(days=7) 
+    end_date = today.strftime("%m_%d")
+    start_date = seven_days_ago.strftime("%m_%d")
+    report_name = f"Environment Report {start_date}-{end_date}.pdf"
 
-    with PdfPages("cluster_report.pdf") as pdf:
+    with PdfPages(report_name) as pdf:
         width = 0.35
         plt.figure(figsize=(10, 6))
         plt.bar([i - width/2 for i in x], partitions, width, color="skyblue", label="Partitions")
@@ -104,21 +112,36 @@ def generate_report(clusters):
         pdf.savefig()
         plt.close()
 
-    logging.info("Plots saved to cluster_plots.pdf")
+        width = 0.25
+        plt.figure(figsize=(10, 6))
+        plt.bar([i - width for i in x], avg_cluster_load, width, color="orange", label="Avg Cluster Load")
+        plt.bar(x, max_cluster_load, width, color="red", label="Max Cluster Load")
+        plt.xticks(x, cluster_names)
+        plt.ylabel("Cluster Load %")
+        plt.xlabel("Cluster")
+        plt.title(f"Cluster Load")
+        plt.legend()
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close()
+
+    logging.info(f"Generated Report: {report_name}")
 
 
 def main():
     past_week = generate_time_interval(7)
     today = generate_time_interval(1)
-    print(today)
+    logging.info(f"Retrieving metrics for the period {past_week}...")
+    
     # Metrics included here will contain an average and maximum.
     metrics = {
         "avg_active_connections": "io.confluent.kafka.server/active_connection_count",
+        "avg_cluster_load": "io.confluent.kafka.server/cluster_load_percent"
     }
     partition_metric = "io.confluent.kafka.server/partition_count"
 
     for cluster_name, cluster_data in clusters.items():
-        logging.info(f"Retrieving data for cluster `{cluster_name}` during interval {past_week}")
+        logging.info(f"Retrieving metrics for cluster `{cluster_name}` during interval {past_week}")
         
         for metric_name, metric_key in metrics.items():
             data = get_metric_data(cluster_data, metric_key, past_week, "PT4H")
@@ -132,8 +155,14 @@ def main():
         partition_values = [entry["value"] for entry in partition_data.get("data", [])]
         cluster_data["partition_count"] = partition_values[0] if partition_values else 0
 
+    print(json.dumps(clusters, indent=2))
     generate_report(clusters)
 
 
 if __name__ == '__main__':
     main()
+
+# curl 'https://api.telemetry.confluent.cloud/v2/metrics/cloud/query' \
+# -H "Content-Type: application/json" \
+# -d '{"aggregations":[{"metric":"io.confluent.kafka.schema_registry/schema_count"}],"filter":{"op":"OR","filters":[{"field":"resource.schema_registry.id","op":"EQ","value":"lsrc-5mmo32"}]},"granularity":"PT1M","intervals":["2024-11-28T12:56:00+02:00/2024-11-28T13:56:00+02:00"],"limit":1000}' \
+# -H "Authorization: Basic base64(<API_KEY>:<API_SECRET>)"
