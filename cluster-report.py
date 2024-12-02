@@ -16,6 +16,9 @@ HEADERS = { 'Authorization': f"Basic {os.getenv('HEADER')}" }
 with open('clusters.json', 'r') as f:
     clusters = json.load(f)
 
+with open('schema_registries.json') as f:
+    schema_registries = json.load(f)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 if not [HEADERS['Authorization']]:
@@ -47,13 +50,13 @@ def make_request(endpoint, payload, retries=1, delay=5):
     return {}
 
 
-def get_metric_data(cluster, metric, interval, granularity):
+def get_metric_data(cluster, metric, interval, granularity, field):
     payload = {
         "aggregations": [{"metric": metric}],
         "filter": {
             "op": "OR",
             "filters": [
-                {"field": "resource.kafka.id", "op": "EQ", "value": cluster["id"]}
+                {"field": field, "op": "EQ", "value": cluster["id"]}
             ]
         },
         "granularity": granularity,
@@ -63,9 +66,9 @@ def get_metric_data(cluster, metric, interval, granularity):
 
     response = make_request("/v2/metrics/cloud/query", payload)
     return response if response else {"data": []}
-    
 
-def generate_report(clusters):
+
+def generate_report(clusters, schema_registries):
     cluster_names = list(clusters.keys())
     x = range(len(cluster_names))
 
@@ -77,6 +80,11 @@ def generate_report(clusters):
     cku_thresholds = [18000 * clusters[name]["CKU"] for name in cluster_names]
     partitions = [clusters[name]["partition_count"] for name in cluster_names]
     partition_limits = [4500 * clusters[name]["CKU"] for name in cluster_names]
+
+    environment_names = list(schema_registries.keys())
+    xs = range(len(environment_names))
+    schema_counts = [schema_registries[name]["schema_counts"] for name in environment_names]
+    free_schemas = [1000 for name in environment_names]
     
     today = datetime.today()
     seven_days_ago = today - timedelta(days=7) 
@@ -84,17 +92,24 @@ def generate_report(clusters):
     start_date = seven_days_ago.strftime("%m_%d")
     report_name = f"Environment Report {start_date}-{end_date}.pdf"
 
+
+
     with PdfPages(report_name) as pdf:
+        information = [
+            "A cluster is granted 4500 partitions per CKU. This is a hard limit, meaning once the limit is reached new topics cannot be created.'\n' Partitions are fairly stable and only typically increase when new services are introduced. The number of partitions of a topic can only be increased, not decreased"
+        ]
+                
         width = 0.35
         plt.figure(figsize=(10, 6))
         plt.bar([i - width/2 for i in x], partitions, width, color="skyblue", label="Partitions")
         plt.bar([i + width/2 for i in x], partition_limits, width, color="orange", label="Partition Limit")
-        plt.xticks(x, cluster_names)
+        plt.xticks(x, cluster_names, rotation=45, ha="right")
         plt.xlabel("Cluster")
         plt.ylabel("Partitions")
         plt.title("Cluster Partitions: Current vs Limit")
         plt.legend()
         plt.tight_layout()
+        plt.figtext(0.5, -0.1, information, wrap=True, horizontalalignment='center', fontsize=10)
         pdf.savefig()
         plt.close()
 
@@ -103,7 +118,7 @@ def generate_report(clusters):
         plt.bar([i - width for i in x], avg_connections, width, color="skyblue", label="Avg Active Connections")
         plt.bar(x, max_connections, width, color="orange", label="Max Active Connections")
         plt.bar([i + width for i in x], cku_thresholds, width, color="red", label="Recommended Connections")
-        plt.xticks(x, cluster_names)
+        plt.xticks(x, cluster_names, rotation=45, ha="right")
         plt.ylabel("Active Connections")
         plt.xlabel("Cluster")
         plt.title(f"Cluster Connections: Average, Maximum & Recommended")
@@ -116,10 +131,23 @@ def generate_report(clusters):
         plt.figure(figsize=(10, 6))
         plt.bar([i - width for i in x], avg_cluster_load, width, color="orange", label="Avg Cluster Load")
         plt.bar(x, max_cluster_load, width, color="red", label="Max Cluster Load")
-        plt.xticks(x, cluster_names)
+        plt.xticks(x, cluster_names, rotation=45, ha="right")
         plt.ylabel("Cluster Load %")
         plt.xlabel("Cluster")
         plt.title(f"Cluster Load")
+        plt.legend()
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close()
+
+        width = 0.35
+        plt.figure(figsize=(10, 6))
+        plt.bar([i - width/2 for i in xs], schema_counts, width, color="skyblue", label="Schemas")
+        plt.bar([i + width/2 for i in xs], free_schemas, width, color="orange", label="Free Schema Limit")
+        plt.xticks(xs, environment_names, rotation=45, ha="right")
+        plt.xlabel("Environment")
+        plt.ylabel("Schemas")
+        plt.title("Schema Usage per Environment")
         plt.legend()
         plt.tight_layout()
         pdf.savefig()
@@ -139,30 +167,34 @@ def main():
         "avg_cluster_load": "io.confluent.kafka.server/cluster_load_percent"
     }
     partition_metric = "io.confluent.kafka.server/partition_count"
-
+    
     for cluster_name, cluster_data in clusters.items():
-        logging.info(f"Retrieving metrics for cluster `{cluster_name}` during interval {past_week}")
+        logging.info(f"Retrieving metrics for cluster `{cluster_name}`...")
         
         for metric_name, metric_key in metrics.items():
-            data = get_metric_data(cluster_data, metric_key, past_week, "PT4H")
+            data = get_metric_data(cluster_data, metric_key, past_week, "PT4H", "resource.kafka.id")
             values = [entry["value"] for entry in data.get("data", [])]
             metric_value = sum(values) / len(values) if values else 0
             max_value = max(values) if values else 0
             cluster_data[metric_name] = metric_value
             cluster_data[f"max_{metric_name}"] = max_value
 
-        partition_data = get_metric_data(cluster_data, partition_metric, today, "P1D")
+        partition_data = get_metric_data(cluster_data, partition_metric, today, "P1D", "resource.kafka.id")
         partition_values = [entry["value"] for entry in partition_data.get("data", [])]
         cluster_data["partition_count"] = partition_values[0] if partition_values else 0
 
+    schema_metric = "io.confluent.kafka.schema_registry/schema_count"
+
+    for environment_name, environment_data in schema_registries.items():
+        logging.info(f"Retrieving metrics for environment `{environment_name}`...")
+        schema_data = get_metric_data(environment_data, schema_metric, today, "P1D", "resource.schema_registry.id")
+        schema_counts = [entry["value"] for entry in schema_data.get("data", [])]
+        environment_data["schema_counts"] = schema_counts[0] if schema_counts else 0
+    
+    print(json.dumps(schema_registries, indent=2))
     print(json.dumps(clusters, indent=2))
-    generate_report(clusters)
+    generate_report(clusters, schema_registries) 
 
 
 if __name__ == '__main__':
     main()
-
-# curl 'https://api.telemetry.confluent.cloud/v2/metrics/cloud/query' \
-# -H "Content-Type: application/json" \
-# -d '{"aggregations":[{"metric":"io.confluent.kafka.schema_registry/schema_count"}],"filter":{"op":"OR","filters":[{"field":"resource.schema_registry.id","op":"EQ","value":"lsrc-5mmo32"}]},"granularity":"PT1M","intervals":["2024-11-28T12:56:00+02:00/2024-11-28T13:56:00+02:00"],"limit":1000}' \
-# -H "Authorization: Basic base64(<API_KEY>:<API_SECRET>)"
