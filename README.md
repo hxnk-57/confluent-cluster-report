@@ -8,6 +8,7 @@ The report includes active connections and partitions, providing more visibiilit
 |---|:---|:---|
 |Active Connections|18000 per CKU |Soft Limit. Potential Performance Degregagation|
 |Partitions|4500 per CKU| Hard Limit. No new topics can be created once the limit is reached|
+| Schemas| 1000 for the Essentials Package| Under the current commit we are still entitled to 1000 free schemas
 
 
 ## Getting Started
@@ -40,19 +41,26 @@ python -m pip install -r requirements.txt
     - Create a Confluent Cloud service account or use the existing `svc_vg_cluster_report` service account.
     - Assign the MetricsViewer role to the service account.
 
-2. Generate an API Key
+1. Generate an API Key
     - Create a Cloud API key owned by the service account.
     - Base64 encode the `API_KEY:SECRET` pair (e.g., `echo -n "API_KEY:SECRET" | base64`)
 
-3. Prepare Configuration files
+1. Prepare Configuration files
     - Rename `.env.example` to `.env` and update it with the Base64-encoded credentials.
     - Rename `clusters.json.example` to `clusters.json` and populate it with cluster details in the following format:
-```json
-    "cluster_alias" : {
-        "id": "cluster_id",
-        "CKU" : 1    
-    } 
-```
+    ```json
+        "cluster_alias" : {
+            "id": "cluster_id",
+            "CKU" : 1    
+        } 
+    ```
+    - Finally, Rename `schema_registries.json.example` to `schema_registries.json` and populate it with the schema registry details in the following format:
+
+    ```json
+        "EnvironmentName" : {
+            "id" : "lsrc-00000",
+        }
+    ```
 
 ## Running the Script
 1. Generate the Report

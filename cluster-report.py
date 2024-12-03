@@ -84,21 +84,15 @@ def generate_report(clusters, schema_registries):
     environment_names = list(schema_registries.keys())
     xs = range(len(environment_names))
     schema_counts = [schema_registries[name]["schema_counts"] for name in environment_names]
-    free_schemas = [1000 for name in environment_names]
     
     today = datetime.today()
     seven_days_ago = today - timedelta(days=7) 
     end_date = today.strftime("%m_%d")
     start_date = seven_days_ago.strftime("%m_%d")
     report_name = f"Environment Report {start_date}-{end_date}.pdf"
+    
 
-
-
-    with PdfPages(report_name) as pdf:
-        information = [
-            "A cluster is granted 4500 partitions per CKU. This is a hard limit, meaning once the limit is reached new topics cannot be created.'\n' Partitions are fairly stable and only typically increase when new services are introduced. The number of partitions of a topic can only be increased, not decreased"
-        ]
-                
+    with PdfPages(report_name) as pdf:      
         width = 0.35
         plt.figure(figsize=(10, 6))
         plt.bar([i - width/2 for i in x], partitions, width, color="skyblue", label="Partitions")
@@ -109,7 +103,6 @@ def generate_report(clusters, schema_registries):
         plt.title("Cluster Partitions: Current vs Limit")
         plt.legend()
         plt.tight_layout()
-        plt.figtext(0.5, -0.1, information, wrap=True, horizontalalignment='center', fontsize=10)
         pdf.savefig()
         plt.close()
 
@@ -143,7 +136,7 @@ def generate_report(clusters, schema_registries):
         width = 0.35
         plt.figure(figsize=(10, 6))
         plt.bar([i - width/2 for i in xs], schema_counts, width, color="skyblue", label="Schemas")
-        plt.bar([i + width/2 for i in xs], free_schemas, width, color="orange", label="Free Schema Limit")
+        plt.axhline(1000, color="red", linestyle="solid", label="Free Schemas")
         plt.xticks(xs, environment_names, rotation=45, ha="right")
         plt.xlabel("Environment")
         plt.ylabel("Schemas")
