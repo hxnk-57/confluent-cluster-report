@@ -67,7 +67,18 @@ def get_metric_data(cluster, metric, interval, granularity, field):
     response = make_request("/v2/metrics/cloud/query", payload)
     return response if response else {"data": []}
 
-
+def add_text_to_pdf(text, pdf, max_lines=25, line_height=0.04):
+    """
+    Helper function to add long text to multiple PDF pages.
+    """
+    lines = text.split("\n")
+    for i in range(0, len(lines), max_lines):
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.axis("off")
+        page_text = "\n".join(lines[i:i + max_lines])
+        ax.text(0.05, 0.95, page_text, fontsize=10, verticalalignment="top", horizontalalignment="left", wrap=True)
+        pdf.savefig(fig)
+        plt.close(fig)
 def generate_report(clusters, schema_registries):
     cluster_names = list(clusters.keys())
     x = range(len(cluster_names))
@@ -106,6 +117,17 @@ def generate_report(clusters, schema_registries):
         pdf.savefig()
         plt.close()
 
+        # Partition Count Analysis
+        text = "Partition Count Analysis\n\n"
+        text += f"Summary: The average number of partitions across all clusters is {sum(partitions) / len(partitions):.0f}. "
+        text += f"The cluster with the highest partition count is {cluster_names[partitions.index(max(partitions))]} with {max(partitions):.0f} partitions.\n\n"
+        text += "Cluster Details:\n"
+        for i, cluster_name in enumerate(cluster_names):
+            utilization = (partitions[i] / partition_limits[i]) * 100 if partition_limits[i] > 0 else 0
+            text += f"- {cluster_name}: Partitions: {partitions[i]:.0f} | Limit: {partition_limits[i]} | Utilization: {utilization:.2f}%\n"
+        add_text_to_pdf(text, pdf)
+
+        # Active Connections Graph
         width = 0.25
         plt.figure(figsize=(10, 6))
         plt.bar([i - width for i in x], avg_connections, width, color="skyblue", label="Avg Active Connections")
@@ -121,6 +143,18 @@ def generate_report(clusters, schema_registries):
         plt.close()
 
         width = 0.25
+
+        # Active Connections Analysis
+        text = "Active Connections Analysis\n\n"
+        text += f"Summary: The average number of active connections across all clusters is {sum(avg_connections) / len(avg_connections):.0f}. "
+        text += f"The cluster with the highest active connections is {cluster_names[max_connections.index(max(max_connections))]} with {max(max_connections):.0f} connections.\n\n"
+        text += "Cluster Details:\n"
+        for i, cluster_name in enumerate(cluster_names):
+            status = "Within Limit" if max_connections[i] <= cku_thresholds[i] else "Exceeds Limit"
+            text += f"- {cluster_name}: Avg Connections: {avg_connections[i]:.0f} | Max Connections: {max_connections[i]:.0f} | Recommended Limit: {cku_thresholds[i]} | Status: ({status})\n"
+        add_text_to_pdf(text, pdf)
+
+        # Cluster Load Graph
         plt.figure(figsize=(10, 6))
         plt.bar([i - width for i in x], avg_cluster_load, width, color="orange", label="Avg Cluster Load")
         plt.bar(x, max_cluster_load, width, color="red", label="Max Cluster Load")
@@ -132,6 +166,18 @@ def generate_report(clusters, schema_registries):
         plt.tight_layout()
         pdf.savefig()
         plt.close()
+        # Cluster Load Analysis
+        text = "Cluster Load Analysis\n\n"
+        average_load = sum(avg_cluster_load) / len(avg_cluster_load)
+        max_load_cluster = cluster_names[avg_cluster_load.index(max(avg_cluster_load))]
+        max_load = max(avg_cluster_load)
+        text += f"Summary: The average cluster load across all clusters is {average_load:.2f}%. "
+        text += f"The cluster with the highest load is {max_load_cluster} with a load of {max_load:.2f}%.\n\n"
+        text += "Cluster Details:\n"
+        for i, cluster_name in enumerate(cluster_names):
+            status = "Optimal" if avg_cluster_load[i] < 50 else "Moderate" if avg_cluster_load[i] < 75 else "High"
+            text += f"- {cluster_name}: Avg Load: {avg_cluster_load[i]:.2f}% | Max Load: {max_cluster_load[i]:.2f}% | Status:({status})\n"
+        add_text_to_pdf(text, pdf)
 
         width = 0.35
         plt.figure(figsize=(10, 6))
@@ -145,6 +191,16 @@ def generate_report(clusters, schema_registries):
         plt.tight_layout()
         pdf.savefig()
         plt.close()
+
+        # Schemas Analysis
+        text = "Schema Count Analysis\n\n"
+        text += f"Summary: The number of schemas across all environments is {sum(schema_counts):.0f}. "
+        text += f"The schema registry with the highest number of schemas is {environment_names[schema_counts.index(max(schema_counts))]} with {max(schema_counts):.0f} schemas.\n\n"
+        text += "Cluster Details:\n"
+        for i, environment_names in enumerate(environment_names):
+            status = "Within Limit" if schema_counts[i] <= free_schemas[i] else "Exceeds Limit"
+            text += f"- {environment_names}: Schemas Count: {schema_counts[i]:.0f} | Recommended Limit: {free_schemas[i]} | Status: ({status})\n"
+        add_text_to_pdf(text, pdf)
 
     logging.info(f"Generated Report: {report_name}")
 
