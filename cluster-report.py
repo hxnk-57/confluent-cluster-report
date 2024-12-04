@@ -121,11 +121,28 @@ def generate_report(clusters, schema_registries):
         text = "Partition Count Analysis\n\n"
         text += f"Summary: The average number of partitions across all clusters is {sum(partitions) / len(partitions):.0f}. "
         text += f"The cluster with the highest partition count is {cluster_names[partitions.index(max(partitions))]} with {max(partitions):.0f} partitions.\n\n"
+
+        # Partition Limits Explained
+        text += "Partition Limits Explained:\n"
+        text += "Each CKU (Confluent Kafka Unit) supports a maximum of 4,500 partitions pre-replication. "
+        text += "This means that for a cluster with multiple CKUs, the total partition limit is 4,500 multiplied by the number of CKUs allocated to the cluster. "
+        text += "Reaching this limit prevents the creation of additional partitions, and exceeding it may result in degraded performance or errors when creating new topics.\n\n"
+
         text += "Cluster Details:\n"
         for i, cluster_name in enumerate(cluster_names):
             utilization = (partitions[i] / partition_limits[i]) * 100 if partition_limits[i] > 0 else 0
             text += f"- {cluster_name}: Partitions: {partitions[i]:.0f} | Limit: {partition_limits[i]} | Utilization: {utilization:.2f}%\n"
+
+        # # Add recommendations if limits are high
+        # text += "\nRecommendations:\n"
+        # text += "To reduce the number of partitions:\n"
+        # text += "- Delete unused topics with high partition counts.\n"
+        # text += "- Consolidate topics with similar data into fewer partitions.\n"
+        # text += "- Use the Kafka Admin interface to increase the partition count of existing topics if needed.\n\n"
+
+        # Save the text to the PDF using the helper function
         add_text_to_pdf(text, pdf)
+
 
         # Active Connections Graph
         width = 0.25
@@ -146,13 +163,33 @@ def generate_report(clusters, schema_registries):
 
         # Active Connections Analysis
         text = "Active Connections Analysis\n\n"
+        
+        # Summary
         text += f"Summary: The average number of active connections across all clusters is {sum(avg_connections) / len(avg_connections):.0f}. "
         text += f"The cluster with the highest active connections is {cluster_names[max_connections.index(max(max_connections))]} with {max(max_connections):.0f} connections.\n\n"
+
+        # Explanation of Connection Limits
+        text += "Connection Limits Explained:\n"
+        text += "Each CKU (Confluent Kafka Unit) supports up to 18,000 client connections. Where all our non-prod clusters have 1CKU, FF & SLI Prod with 3CKUs each and 2CKU for the rest of the production clusters "
+        text += "This limit is a guideline to avoid latency and performance issues, particularly for test clients. "
+        text += "Exceeding the recommended connection count may not impact all workloads but can lead to increased latency for test clients. "
+        text += "It's important to monitor the impact of connection count on cluster load, as this is the most accurate representation of the workload's effect on the cluster's underlying resources.\n\n"
+        
+        # Cluster Details
         text += "Cluster Details:\n"
         for i, cluster_name in enumerate(cluster_names):
             status = "Within Limit" if max_connections[i] <= cku_thresholds[i] else "Exceeds Limit"
             text += f"- {cluster_name}: Avg Connections: {avg_connections[i]:.0f} | Max Connections: {max_connections[i]:.0f} | Recommended Limit: {cku_thresholds[i]} | Status: ({status})\n"
+
+        # # Recommendations
+        # text += "\nRecommendations:\n"
+        # text += "- Monitor cluster load as connection count increases to ensure performance remains optimal.\n"
+        # text += "- Reduce the number of unnecessary or unused client connections.\n"
+        # text += "- If connection limits are regularly exceeded, consider increasing the number of CKUs in the cluster.\n"
+
+        # Save the text to the PDF using the helper function
         add_text_to_pdf(text, pdf)
+
 
         # Cluster Load Graph
         plt.figure(figsize=(10, 6))
@@ -166,18 +203,38 @@ def generate_report(clusters, schema_registries):
         plt.tight_layout()
         pdf.savefig()
         plt.close()
-        # Cluster Load Analysis
+
+        # # Cluster Load Analysis
         text = "Cluster Load Analysis\n\n"
+
+        # Summary
         average_load = sum(avg_cluster_load) / len(avg_cluster_load)
         max_load_cluster = cluster_names[avg_cluster_load.index(max(avg_cluster_load))]
         max_load = max(avg_cluster_load)
         text += f"Summary: The average cluster load across all clusters is {average_load:.2f}%. "
         text += f"The cluster with the highest load is {max_load_cluster} with a load of {max_load:.2f}%.\n\n"
+
+        # Explanation of Cluster Load
+        text += "Cluster Load Explained:\n"
+        text += "Cluster load is a measure of the percentage utilization of the cluster's resources. "
+        text += "A cluster load below 50% is considered optimal, while loads between 50% and 75% indicate moderate utilization. "
+        text += "A load above 75% suggests high utilization, which may impact performance. Regularly monitoring and optimizing cluster load ensures the best performance for your workloads.\n\n"
+
+        # Cluster Details
         text += "Cluster Details:\n"
         for i, cluster_name in enumerate(cluster_names):
             status = "Optimal" if avg_cluster_load[i] < 50 else "Moderate" if avg_cluster_load[i] < 75 else "High"
-            text += f"- {cluster_name}: Avg Load: {avg_cluster_load[i]:.2f}% | Max Load: {max_cluster_load[i]:.2f}% | Status:({status})\n"
+            text += f"- {cluster_name}: Avg Load: {avg_cluster_load[i]:.2f}% | Max Load: {max_cluster_load[i]:.2f}% | Status: ({status})\n"
+
+        # # Recommendations
+        # text += "\nRecommendations:\n"
+        # text += "- Optimize workload distribution to reduce load on clusters with high utilization.\n"
+        # text += "- Regularly monitor the cluster load to ensure it remains within acceptable limits.\n"
+        # text += "- Consider increasing CKU capacity for clusters consistently exceeding 75% load.\n"
+
+        # Save to PDF
         add_text_to_pdf(text, pdf)
+
 
         width = 0.35
         plt.figure(figsize=(10, 6))
@@ -192,15 +249,37 @@ def generate_report(clusters, schema_registries):
         pdf.savefig()
         plt.close()
 
-        # Schemas Analysis
+        # Schema Count Analysis
         text = "Schema Count Analysis\n\n"
-        text += f"Summary: The number of schemas across all environments is {sum(schema_counts):.0f}. "
-        text += f"The schema registry with the highest number of schemas is {environment_names[schema_counts.index(max(schema_counts))]} with {max(schema_counts):.0f} schemas.\n\n"
-        text += "Cluster Details:\n"
-        for i, environment_names in enumerate(environment_names):
-            status = "Within Limit" if schema_counts[i] <= free_schemas[i] else "Exceeds Limit"
-            text += f"- {environment_names}: Schemas Count: {schema_counts[i]:.0f} | Recommended Limit: {free_schemas[i]} | Status: ({status})\n"
+
+        # Summary
+        total_schemas = sum(schema_counts)
+        max_schemas = max(schema_counts)
+        max_schemas_env = environment_names[schema_counts.index(max_schemas)]
+        text += f"Summary: The total number of schemas across all environments is {total_schemas}. "
+        text += f"The environment with the highest number of schemas is {max_schemas_env} with {max_schemas} schemas.\n\n"
+
+        # Explanation of Schema Limits
+        text += "Schema Limits Explained:\n"
+        text += "Schema registries store schemas for topics and ensure compatibility. "
+        text += "The recommended limit for schemas per registry is 1,000 to maintain optimal performance. "
+        text += "Exceeding this limit may result in slower schema lookups and increased latency for client applications.\n\n"
+
+        # Schema Registry Details
+        text += "Schema Registry Details:\n"
+        for i, env_name in enumerate(environment_names):
+            status = "Within Limit" if schema_counts[i] <= 1000 else "Exceeds Limit"
+            text += f"- {env_name}: Schema Count: {schema_counts[i]} | Recommended Limit: 1000 | Status: ({status})\n"
+
+        # # Recommendations
+        # text += "\nRecommendations:\n"
+        # text += "- Consolidate and remove unused schemas to stay within recommended limits.\n"
+        # text += "- Ensure schemas are versioned and compatible to avoid unnecessary proliferation.\n"
+        # text += "- If limits are exceeded, consider splitting schemas across multiple registries or optimizing schema reuse.\n"
+
+        # Save to PDF
         add_text_to_pdf(text, pdf)
+
 
     logging.info(f"Generated Report: {report_name}")
 
