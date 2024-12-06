@@ -123,10 +123,14 @@ def generate_report(clusters, schema_registries):
         text += f"The cluster with the highest partition count is {cluster_names[partitions.index(max(partitions))]} with {max(partitions):.0f} partitions.\n\n"
 
         # Partition Limits Explained
-        text += "Partition Limits Explained:\n"
-        text += "Each CKU (Confluent Kafka Unit) supports a maximum of 4,500 partitions pre-replication. "
-        text += "This means that for a cluster with multiple CKUs, the total partition limit is 4,500 multiplied by the number of CKUs allocated to the cluster. "
-        text += "Reaching this limit prevents the creation of additional partitions, and exceeding it may result in degraded performance or errors when creating new topics.\n\n"
+        text = """Partition Limits:
+Each CKU (Confluent Kafka Unit) supports a maximum of 4,500 partitions before replication. 
+This means that for a cluster with multiple CKUs, the total partition limit is calculated as 
+4,500 multiplied by the cluster's CKU count. 
+
+Reaching this limit prevents the creation of additional partitions, and exceeding it may lead to 
+degraded performance or errors when attempting to create new topics.
+"""
 
         text += "Cluster Details:\n"
         for i, cluster_name in enumerate(cluster_names):
@@ -169,11 +173,18 @@ def generate_report(clusters, schema_registries):
         text += f"The cluster with the highest active connections is {cluster_names[max_connections.index(max(max_connections))]} with {max(max_connections):.0f} connections.\n\n"
 
         # Explanation of Connection Limits
-        text += "Connection Limits Explained:\n"
-        text += "Each CKU (Confluent Kafka Unit) supports up to 18,000 client connections. Where all our non-prod clusters have 1CKU, FF & SLI Prod with 3CKUs each and 2CKU for the rest of the production clusters "
-        text += "This limit is a guideline to avoid latency and performance issues, particularly for test clients. "
-        text += "Exceeding the recommended connection count may not impact all workloads but can lead to increased latency for test clients. "
-        text += "It's important to monitor the impact of connection count on cluster load, as this is the most accurate representation of the workload's effect on the cluster's underlying resources.\n\n"
+        text += """Connection Limits Explained:
+Each CKU (Confluent Kafka Unit) supports up to 18,000 client connections. 
+All non-production clusters typically have 1 CKU, while FF & SLI production clusters have 3 CKUs, 
+and the remaining production clusters have 2 CKUs. 
+
+This is a soft limit and should be used as a guideline to avoid latency and performance issues, 
+particularly for test clients. Exceeding the recommended connection count may not impact all workloads 
+but can result in increased latency for test clients. 
+
+It is important to monitor how the connection count affects cluster load, as this provides the most accurate 
+representation of the workload's impact on the cluster's underlying resources.
+"""
         
         # Cluster Details
         text += "Cluster Details:\n"
@@ -215,10 +226,13 @@ def generate_report(clusters, schema_registries):
         text += f"The cluster with the highest load is {max_load_cluster} with a load of {max_load:.2f}%.\n\n"
 
         # Explanation of Cluster Load
-        text += "Cluster Load Explained:\n"
-        text += "Cluster load is a measure of the percentage utilization of the cluster's resources. "
-        text += "A cluster load below 50% is considered optimal, while loads between 50% and 75% indicate moderate utilization. "
-        text += "A load above 75% suggests high utilization, which may impact performance. Regularly monitoring and optimizing cluster load ensures the best performance for your workloads.\n\n"
+        text += """Cluster Load Explained:
+Cluster load measures the percentage utilization of the cluster's resources. 
+A cluster load below 50% is considered optimal, while loads between 50% and 75% indicate moderate utilization. 
+A load above 75% suggests high utilization, which could impact performance. 
+
+Regular monitoring and optimization of cluster load are crucial to ensuring optimal performance for your workloads.
+"""
 
         # Cluster Details
         text += "Cluster Details:\n"
@@ -260,10 +274,11 @@ def generate_report(clusters, schema_registries):
         text += f"The environment with the highest number of schemas is {max_schemas_env} with {max_schemas} schemas.\n\n"
 
         # Explanation of Schema Limits
-        text += "Schema Limits Explained:\n"
-        text += "Schema registries store schemas for topics and ensure compatibility. "
-        text += "The recommended limit for schemas per registry is 1,000 to maintain optimal performance. "
-        text += "Exceeding this limit may result in slower schema lookups and increased latency for client applications.\n\n"
+        text += """Schema Limits Explained:
+Schema registries store schemas for topics and ensure compatibility. 
+The recommended limit for schemas per registry is 1,000 to maintain optimal performance. 
+Exceeding this limit may result in slower schema lookups and increased latency for client applications.
+"""
 
         # Schema Registry Details
         text += "Schema Registry Details:\n"
@@ -314,7 +329,7 @@ def main():
     schema_metric = "io.confluent.kafka.schema_registry/schema_count"
 
     for environment_name, environment_data in schema_registries.items():
-        logging.info(f"Retrieving metrics for environment `{environment_name}`...")
+        logging.info(f"Retrieving schema metrics for environment `{environment_name}`...")
         schema_data = get_metric_data(environment_data, schema_metric, today, "P1D", "resource.schema_registry.id")
         schema_counts = [entry["value"] for entry in schema_data.get("data", [])]
         environment_data["schema_counts"] = schema_counts[0] if schema_counts else 0
