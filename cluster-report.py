@@ -68,9 +68,6 @@ def get_metric_data(cluster, metric, interval, granularity, field):
     return response if response else {"data": []}
 
 def add_text_to_pdf(text, pdf, max_lines=25, line_height=0.04):
-    """
-    Helper function to add long text to multiple PDF pages.
-    """
     lines = text.split("\n")
     for i in range(0, len(lines), max_lines):
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -79,6 +76,7 @@ def add_text_to_pdf(text, pdf, max_lines=25, line_height=0.04):
         ax.text(0.05, 0.95, page_text, fontsize=10, verticalalignment="top", horizontalalignment="left", wrap=True)
         pdf.savefig(fig)
         plt.close(fig)
+
 def generate_report(clusters, schema_registries):
     cluster_names = list(clusters.keys())
     x = range(len(cluster_names))
@@ -95,19 +93,25 @@ def generate_report(clusters, schema_registries):
     environment_names = list(schema_registries.keys())
     xs = range(len(environment_names))
     schema_counts = [schema_registries[name]["schema_counts"] for name in environment_names]
-    
+
     today = datetime.today()
-    seven_days_ago = today - timedelta(days=7) 
+    seven_days_ago = today - timedelta(days=7)
     end_date = today.strftime("%m_%d")
     start_date = seven_days_ago.strftime("%m_%d")
     report_name = f"Environment Report {start_date}-{end_date}.pdf"
-    
 
-    with PdfPages(report_name) as pdf:      
-        width = 0.35
+    with PdfPages(report_name) as pdf:
+        # Partition Limit Diagram
+        width = 0.45
         plt.figure(figsize=(10, 6))
-        plt.bar([i - width/2 for i in x], partitions, width, color="skyblue", label="Partitions")
-        plt.bar([i + width/2 for i in x], partition_limits, width, color="orange", label="Partition Limit")
+        partition_bars = plt.bar([i - width/2 for i in x], partitions, width, color="skyblue", label="Partitions")
+        partition_limit_bars = plt.bar([i + width/2 for i in x], partition_limits, width, color="orange", label="Partition Limit")
+
+        for bar in partition_bars:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=6)
+        for bar in partition_limit_bars:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=6)
+
         plt.xticks(x, cluster_names, rotation=45, ha="right")
         plt.xlabel("Cluster")
         plt.ylabel("Partitions")
@@ -117,44 +121,38 @@ def generate_report(clusters, schema_registries):
         pdf.savefig()
         plt.close()
 
-        # Partition Count Analysis
-        text = "Partition Count Analysis\n\n"
-        text += f"Summary: The average number of partitions across all clusters is {sum(partitions) / len(partitions):.0f}. "
-        text += f"The cluster with the highest partition count is {cluster_names[partitions.index(max(partitions))]} with {max(partitions):.0f} partitions.\n\n"
+        text = """Partition Management:
+Each CKU (Confluent Kafka Unit) supports a maximum of 4,500 partitions before replication.
+This means that for a cluster with multiple CKUs, the total partition limit is calculated as
+4,500 multiplied by the cluster's CKU count.
 
-        # Partition Limits Explained
-        text = """Partition Limits:
-Each CKU (Confluent Kafka Unit) supports a maximum of 4,500 partitions before replication. 
-This means that for a cluster with multiple CKUs, the total partition limit is calculated as 
-4,500 multiplied by the cluster's CKU count. 
-
-Reaching this limit prevents the creation of additional partitions, and exceeding it may lead to 
+Reaching this limit prevents the creation of additional partitions, and exceeding it may lead to
 degraded performance or errors when attempting to create new topics.
+
+Partitions are fairly stable and typically only increase when services are expanded.
+
+Some general recommendations for managing partition utilization includes:
+- Delete unused topics with high partition counts.
+- Ensure that topics are created with the appropriate number of partitions.
+- Partitions are Kafka's unit of parallelism and lower environments seldomly require a lot of partitions.
+- Note: A topics partition's can only be increased and not decreased.
 """
-
-        text += "Cluster Details:\n"
-        for i, cluster_name in enumerate(cluster_names):
-            utilization = (partitions[i] / partition_limits[i]) * 100 if partition_limits[i] > 0 else 0
-            text += f"- {cluster_name}: Partitions: {partitions[i]:.0f} | Limit: {partition_limits[i]} | Utilization: {utilization:.2f}%\n"
-
-        # # Add recommendations if limits are high
-        # text += "\nRecommendations:\n"
-        # text += "To reduce the number of partitions:\n"
-        # text += "- Delete unused topics with high partition counts.\n"
-        # text += "- Consolidate topics with similar data into fewer partitions.\n"
-        # text += "- Use the Kafka Admin interface to increase the partition count of existing topics if needed.\n\n"
-
-        # Save the text to the PDF using the helper function
         add_text_to_pdf(text, pdf)
 
+        # Active Connections Diagram
+        width = 0.30
+        plt.figure(figsize=(12, 6))
+        avg_bar = plt.bar([i - width for i in x], avg_connections, width, color="skyblue", label="Avg Active Connections")
+        max_bar = plt.bar(x, max_connections, width, color="orange", label="Max Active Connections")
+        recommended_bar = plt.bar([i + width for i in x], cku_thresholds, width, color="red", label="Recommended Connections")
+        for bar in avg_bar:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=5)
+        for bar in max_bar:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=5)
+        for bar in recommended_bar:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=5)
 
-        # Active Connections Graph
-        width = 0.25
-        plt.figure(figsize=(10, 6))
-        plt.bar([i - width for i in x], avg_connections, width, color="skyblue", label="Avg Active Connections")
-        plt.bar(x, max_connections, width, color="orange", label="Max Active Connections")
-        plt.bar([i + width for i in x], cku_thresholds, width, color="red", label="Recommended Connections")
-        plt.xticks(x, cluster_names, rotation=45, ha="right")
+        plt.xticks(x, cluster_names, rotation=60, ha="right")
         plt.ylabel("Active Connections")
         plt.xlabel("Cluster")
         plt.title(f"Cluster Connections: Average, Maximum & Recommended")
@@ -163,50 +161,35 @@ degraded performance or errors when attempting to create new topics.
         pdf.savefig()
         plt.close()
 
-        width = 0.25
+        text = """Active Connection Management:
+Each CKU (Confluent Kafka Unit) supports up to 18,000 client connections.
+All non-production clusters typically have 1 CKU, while FF & SLI production clusters have 3 CKUs,
+and the remaining production clusters have 2 CKUs.
 
-        # Active Connections Analysis
-        text = "Active Connections Analysis\n\n"
-        
-        # Summary
-        text += f"Summary: The average number of active connections across all clusters is {sum(avg_connections) / len(avg_connections):.0f}. "
-        text += f"The cluster with the highest active connections is {cluster_names[max_connections.index(max(max_connections))]} with {max(max_connections):.0f} connections.\n\n"
+This maximum represents a soft limit and should be used as a guideline to avoid latency and performance issues,
+particularly for test clients. Exceeding the recommended connection count may not impact all workloads
+but can result in increased latency for test clients.
 
-        # Explanation of Connection Limits
-        text += """Connection Limits Explained:
-Each CKU (Confluent Kafka Unit) supports up to 18,000 client connections. 
-All non-production clusters typically have 1 CKU, while FF & SLI production clusters have 3 CKUs, 
-and the remaining production clusters have 2 CKUs. 
-
-This is a soft limit and should be used as a guideline to avoid latency and performance issues, 
-particularly for test clients. Exceeding the recommended connection count may not impact all workloads 
-but can result in increased latency for test clients. 
-
-It is important to monitor how the connection count affects cluster load, as this provides the most accurate 
+It is important to monitor how the connection count affects cluster load, as this provides the most accurate
 representation of the workload's impact on the cluster's underlying resources.
+
+Some general recommendations for managing Active Client Connections include:
+- Reduce unncessary or unused client connections.
+- Review and optimize client configurations.
+- Increase the size of the cluster (this has a significant cost impact)
 """
-        
-        # Cluster Details
-        text += "Cluster Details:\n"
-        for i, cluster_name in enumerate(cluster_names):
-            status = "Within Limit" if max_connections[i] <= cku_thresholds[i] else "Exceeds Limit"
-            text += f"- {cluster_name}: Avg Connections: {avg_connections[i]:.0f} | Max Connections: {max_connections[i]:.0f} | Recommended Limit: {cku_thresholds[i]} | Status: ({status})\n"
-
-        # # Recommendations
-        # text += "\nRecommendations:\n"
-        # text += "- Monitor cluster load as connection count increases to ensure performance remains optimal.\n"
-        # text += "- Reduce the number of unnecessary or unused client connections.\n"
-        # text += "- If connection limits are regularly exceeded, consider increasing the number of CKUs in the cluster.\n"
-
-        # Save the text to the PDF using the helper function
         add_text_to_pdf(text, pdf)
 
-
-        # Cluster Load Graph
+        # Cluster Load Diagram
+        width = 0.30
         plt.figure(figsize=(10, 6))
-        plt.bar([i - width for i in x], avg_cluster_load, width, color="orange", label="Avg Cluster Load")
-        plt.bar(x, max_cluster_load, width, color="red", label="Max Cluster Load")
-        plt.xticks(x, cluster_names, rotation=45, ha="right")
+        avg_bar = plt.bar([i - width for i in x], avg_cluster_load, width, color="orange", label="Avg Cluster Load")
+        max_bar = plt.bar(x, max_cluster_load, width, color="red", label="Max Cluster Load")
+        for bar in avg_bar:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=8)
+        for bar in max_bar:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=8)
+        plt.xticks(x, cluster_names, rotation=45)
         plt.ylabel("Cluster Load %")
         plt.xlabel("Cluster")
         plt.title(f"Cluster Load")
@@ -215,44 +198,26 @@ representation of the workload's impact on the cluster's underlying resources.
         pdf.savefig()
         plt.close()
 
-        # # Cluster Load Analysis
-        text = "Cluster Load Analysis\n\n"
-
-        # Summary
-        average_load = sum(avg_cluster_load) / len(avg_cluster_load)
-        max_load_cluster = cluster_names[avg_cluster_load.index(max(avg_cluster_load))]
-        max_load = max(avg_cluster_load)
-        text += f"Summary: The average cluster load across all clusters is {average_load:.2f}%. "
-        text += f"The cluster with the highest load is {max_load_cluster} with a load of {max_load:.2f}%.\n\n"
-
-        # Explanation of Cluster Load
-        text += """Cluster Load Explained:
-Cluster load measures the percentage utilization of the cluster's resources. 
-A cluster load below 50% is considered optimal, while loads between 50% and 75% indicate moderate utilization. 
-A load above 75% suggests high utilization, which could impact performance. 
+        text = """Cluster Load Management:
+Cluster load measures the percentage utilization of the cluster's resources.
+A cluster load below 50% is considered optimal, while loads between 50% and 75% indicate moderate utilization.
+A load above 75% suggests high utilization, which could impact performance.
 
 Regular monitoring and optimization of cluster load are crucial to ensuring optimal performance for your workloads.
+
+Some general recommendations for managing high cluster load includes:
+- Identify the factors that are driving the cluster load.
+- Review and optimize client configurations.
+- Increase the size of the cluster (this has a significant cost impact).
 """
-
-        # Cluster Details
-        text += "Cluster Details:\n"
-        for i, cluster_name in enumerate(cluster_names):
-            status = "Optimal" if avg_cluster_load[i] < 50 else "Moderate" if avg_cluster_load[i] < 75 else "High"
-            text += f"- {cluster_name}: Avg Load: {avg_cluster_load[i]:.2f}% | Max Load: {max_cluster_load[i]:.2f}% | Status: ({status})\n"
-
-        # # Recommendations
-        # text += "\nRecommendations:\n"
-        # text += "- Optimize workload distribution to reduce load on clusters with high utilization.\n"
-        # text += "- Regularly monitor the cluster load to ensure it remains within acceptable limits.\n"
-        # text += "- Consider increasing CKU capacity for clusters consistently exceeding 75% load.\n"
-
-        # Save to PDF
         add_text_to_pdf(text, pdf)
-
-
-        width = 0.35
+        # Schema Reigstry Diagram
+        width = 0.45
         plt.figure(figsize=(10, 6))
-        plt.bar([i - width/2 for i in xs], schema_counts, width, color="skyblue", label="Schemas")
+        schema_bar = plt.bar([i - width/2 for i in xs], schema_counts, width, color="skyblue", label="Schemas")
+        for bar in schema_bar:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom')
+
         plt.axhline(1000, color="red", linestyle="solid", label="Free Schemas")
         plt.xticks(xs, environment_names, rotation=45, ha="right")
         plt.xlabel("Environment")
@@ -263,57 +228,37 @@ Regular monitoring and optimization of cluster load are crucial to ensuring opti
         pdf.savefig()
         plt.close()
 
-        # Schema Count Analysis
-        text = "Schema Count Analysis\n\n"
-
-        # Summary
-        total_schemas = sum(schema_counts)
-        max_schemas = max(schema_counts)
-        max_schemas_env = environment_names[schema_counts.index(max_schemas)]
-        text += f"Summary: The total number of schemas across all environments is {total_schemas}. "
-        text += f"The environment with the highest number of schemas is {max_schemas_env} with {max_schemas} schemas.\n\n"
-
-        # Explanation of Schema Limits
-        text += """Schema Limits Explained:
-Schema registries store schemas for topics and ensure compatibility. 
-The recommended limit for schemas per registry is 1,000 to maintain optimal performance. 
+        text = """Schema Management:
+Schema registries store schemas for topics and ensure compatibility.
+The recommended limit for schemas per registry is 1,000 to maintain optimal performance.
 Exceeding this limit may result in slower schema lookups and increased latency for client applications.
+Remaining within the limit provides a small cost saving.
+There is also a point where upgrading the the schema registry package could save costs.
+
+Some general recommendations for Schema Registry include:
+- Consolidate or remove unused schemas to stay within recommended limits.
+- Ensure schemas are versioned and compatible to avoid unnecessary proliferation.
+- Upgrade the schema governance package (perform a cost analysis first to determine if this will result in a saving)
 """
-
-        # Schema Registry Details
-        text += "Schema Registry Details:\n"
-        for i, env_name in enumerate(environment_names):
-            status = "Within Limit" if schema_counts[i] <= 1000 else "Exceeds Limit"
-            text += f"- {env_name}: Schema Count: {schema_counts[i]} | Recommended Limit: 1000 | Status: ({status})\n"
-
-        # # Recommendations
-        # text += "\nRecommendations:\n"
-        # text += "- Consolidate and remove unused schemas to stay within recommended limits.\n"
-        # text += "- Ensure schemas are versioned and compatible to avoid unnecessary proliferation.\n"
-        # text += "- If limits are exceeded, consider splitting schemas across multiple registries or optimizing schema reuse.\n"
-
-        # Save to PDF
         add_text_to_pdf(text, pdf)
-
-
-    logging.info(f"Generated Report: {report_name}")
+        logging.info(f"Generated Report: {report_name}")
 
 
 def main():
     past_week = generate_time_interval(7)
     today = generate_time_interval(1)
     logging.info(f"Retrieving metrics for the period {past_week}...")
-    
+
     # Metrics included here will contain an average and maximum.
     metrics = {
         "avg_active_connections": "io.confluent.kafka.server/active_connection_count",
         "avg_cluster_load": "io.confluent.kafka.server/cluster_load_percent"
     }
     partition_metric = "io.confluent.kafka.server/partition_count"
-    
+
     for cluster_name, cluster_data in clusters.items():
         logging.info(f"Retrieving metrics for cluster `{cluster_name}`...")
-        
+
         for metric_name, metric_key in metrics.items():
             data = get_metric_data(cluster_data, metric_key, past_week, "PT4H", "resource.kafka.id")
             values = [entry["value"] for entry in data.get("data", [])]
@@ -333,10 +278,10 @@ def main():
         schema_data = get_metric_data(environment_data, schema_metric, today, "P1D", "resource.schema_registry.id")
         schema_counts = [entry["value"] for entry in schema_data.get("data", [])]
         environment_data["schema_counts"] = schema_counts[0] if schema_counts else 0
-    
+
     print(json.dumps(schema_registries, indent=2))
     print(json.dumps(clusters, indent=2))
-    generate_report(clusters, schema_registries) 
+    generate_report(clusters, schema_registries)
 
 
 if __name__ == '__main__':
