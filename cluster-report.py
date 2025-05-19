@@ -189,7 +189,7 @@ Some general recommendations for managing Active Client Connections include:
             plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=8)
         for bar in max_bar:
             plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom', fontsize=8)
-        plt.xticks(x, cluster_names, rotation=45)
+        plt.xticks(x, cluster_names, rotation=45, ha="left")
         plt.ylabel("Cluster Load %")
         plt.xlabel("Cluster")
         plt.title(f"Cluster Load")
@@ -219,7 +219,7 @@ Some general recommendations for managing high cluster load includes:
             plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f'{bar.get_height():.0f}', ha='center', va='bottom')
 
         plt.axhline(1000, color="red", linestyle="solid", label="Free Schemas")
-        plt.xticks(xs, environment_names, rotation=45, ha="right")
+        plt.xticks(xs, environment_names, rotation=45, ha="left")
         plt.xlabel("Environment")
         plt.ylabel("Schemas")
         plt.title("Schema Usage per Environment")
